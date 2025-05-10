@@ -1,3 +1,4 @@
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 
@@ -13,7 +14,7 @@ internal static class EnsurePasswordModule
 	private static readonly string Numbers = "1234567890";
 	private static readonly string Special = "~`!@#$%^&*()_-+={[}]|\\:;\"'<,>.?/";
 	private static readonly SearchValues<char> ValidCharacters = SearchValues.Create([.. AlphabetLower, ..AlphabetLower, ..Numbers, ..Special]);
-	public static bool EnsurePasswordIsSecureSearchValues(string password)
+	public static bool EnsurePasswordIsSecure_SearchValues(string password)
 	{
 		string pass = password;
 		for (int i = pass.Length - 1; i >= 0; i--)
@@ -24,11 +25,35 @@ internal static class EnsurePasswordModule
 
 		return true;
 	}
+	
+	public static bool EnsurePasswordIsSecure_SearchValues_Span(ReadOnlySpan<char> password)
+	{
+		ReadOnlySpan<char> pass = password;
+		for (int i = pass.Length - 1; i >= 0; i--)
+		{
+			if (!ValidCharacters.Contains(pass[i]))
+				return false;
+		}
+
+		return true;
+	}
 
 	private static readonly HashSet<char> ValidCharacters2 = [.. AlphabetLower, ..AlphabetLower, ..Numbers, ..Special];
-	public static bool EnsurePasswordIsSecureHashSet(string password)
+	public static bool EnsurePasswordIsSecure_HashSet(string password)
 	{
 		string pass = password;
+		for (int i = pass.Length - 1; i >= 0; i--)
+		{
+			if (!ValidCharacters2.Contains(pass[i]))
+				return false;
+		}
+
+		return true;
+	}
+	
+	public static bool EnsurePasswordIsSecure_HashSet_Span(ReadOnlySpan<char> password)
+	{
+		ReadOnlySpan<char> pass = password;
 		for (int i = pass.Length - 1; i >= 0; i--)
 		{
 			if (!ValidCharacters2.Contains(pass[i]))

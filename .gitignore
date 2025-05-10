@@ -8,3 +8,5 @@ riderModule.iml
 identifier.sqlite
 *.user
 *.db
+*.db-shm
+*.db-wal

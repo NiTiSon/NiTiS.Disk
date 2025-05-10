@@ -1,10 +1,8 @@
-﻿using System;
-using BenchmarkDotNet;
-using BenchmarkDotNet.Attributes;
+﻿using BenchmarkDotNet.Attributes;
 
 namespace NiTiS.Disk.Api.Benchmark
 {
-	public class Benchmarks
+	public class EnsurePasswordBenchmarks
 	{
 		public volatile bool isValid;
 
@@ -15,7 +13,18 @@ namespace NiTiS.Disk.Api.Benchmark
 
 			for (int i = passwords.Length - 1; i >= 0; i--)
 			{
-				isValid = EnsurePasswordModule.EnsurePasswordIsSecureSearchValues(passwords[i]);
+				isValid = EnsurePasswordModule.EnsurePasswordIsSecure_SearchValues(passwords[i]);
+			}
+		}
+		
+		[Benchmark]
+		public void EnsurePassword_Span_SearchValuesImpl()
+		{
+			string[] passwords = TestPasswords;
+
+			for (int i = passwords.Length - 1; i >= 0; i--)
+			{
+				isValid = EnsurePasswordModule.EnsurePasswordIsSecure_SearchValues_Span(passwords[i]);
 			}
 		}
 
@@ -26,7 +35,18 @@ namespace NiTiS.Disk.Api.Benchmark
 
 			for (int i = passwords.Length - 1; i >= 0; i--)
 			{
-				isValid = EnsurePasswordModule.EnsurePasswordIsSecureHashSet(passwords[i]);
+				isValid = EnsurePasswordModule.EnsurePasswordIsSecure_HashSet(passwords[i]);
+			}
+		}
+		
+		[Benchmark]
+		public void EnsurePassword_Span_HashSetImpl()
+		{
+			string[] passwords = TestPasswords;
+
+			for (int i = passwords.Length - 1; i >= 0; i--)
+			{
+				isValid = EnsurePasswordModule.EnsurePasswordIsSecure_HashSet_Span(passwords[i]);
 			}
 		}
 

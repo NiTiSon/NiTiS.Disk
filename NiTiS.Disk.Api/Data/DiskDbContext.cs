@@ -9,11 +9,16 @@ public sealed class DiskDbContext : DbContext
 		Database.EnsureCreated();
 	}
 
-	public DbSet<User> Users { get; set; }
+	protected override void OnModelCreating(ModelBuilder builder)
+	{
+		builder.Entity<User>()
+			.HasIndex(u => u.Username)
+			.IsUnique();
+	}
 
-	public DbSet<Login> Logins { get; set; }
+	public DbSet<User> Users { get; set; } = null!;
+	
+	public DbSet<FileRecord> FileRecords { get; set; } = null!;
 
-	public DbSet<FileRecord> FileRecords { get; set; }
-
-	public DbSet<Session> Sessions { get; set; }
+	public DbSet<Session> Sessions { get; set; } = null!;
 }

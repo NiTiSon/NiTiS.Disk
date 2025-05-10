@@ -1,21 +1,11 @@
 using System;
-using System.Buffers;
-using System.Collections.Generic;
 using System.Linq;
-using System.Net.ServerSentEvents;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Primitives;
-using Microsoft.OpenApi.Validations.Rules;
 using NiTiS.Disk.Api.Data;
+using NiTiS.Disk.Api.Managers;
 
 namespace NiTiS.Disk.Api.Controllers;
 
@@ -23,58 +13,69 @@ namespace NiTiS.Disk.Api.Controllers;
 [Route("api/[controller]/[action]")]
 public class UserController : ControllerBase
 {
-	private readonly DiskDbContext _context;
+	private readonly UserManager _userManager;
 
-	public UserController(DiskDbContext context)
+	public UserController(UserManager userManager)
 	{
-		_context = context;
+		_userManager = userManager;
 	}
 
-	[HttpGet("{userId:long}")]
-	public async Task<ActionResult> GetUserInfo(long userId)
+	[HttpPost]
+	public async Task<ActionResult> RegisterUser(
+		[FromHeader(Name = "X-Username")] string xUsername,
+		[FromHeader(Name = "X-Password")] string xPassword)
 	{
-		User? user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-
-		if (user == null)
+		if (xPassword.Length is < 6 or > 32)
 		{
-			return NotFound("User not found");
-		}
-		else
-		{
-			return Ok(user);
-		}
-	}
-
-	[HttpPost("{displayName}")]
-	public async Task<ActionResult> RegisterUser(string displayName)
-	{
-		StringValues loginValues = Request.HttpContext.Request.Headers["X-Username"];
-		StringValues passwordValues = Request.HttpContext.Request.Headers["X-Password"];
-
-		string? login = loginValues.FirstOrDefault();
-		string? password = passwordValues.FirstOrDefault();
-
-		if (login == null || password == null)
-		{
-			return BadRequest("X-Username and X-Password headers are required");
+			return BadRequest("Password length must be between 6 and 32 characters.");
 		}
 
-		if (password.Length is < 6 or > 32)
+		if (xUsername.Length is < 4 or > 64)
 		{
-			return BadRequest("Password length must be between 6 and 32 characters");
+			return BadRequest("Login length must be between 4 and 64 characters.");
 		}
 
-		if (login.Length is < 4 or > 64)
+		if (!UserManager.EnsurePasswordIsValid(xPassword))
 		{
-			return BadRequest("Login length must be between 4 and 64 characters");
+			return BadRequest("Password contains invalid characters.");
 		}
-
-		string passwordHash = HashPassword(password);
-
 		
+		string hash = UserManager.HashPassword(xPassword);
+
+		if (await _userManager.CheckIfExistsAsync(xUsername))
+		{
+			return BadRequest("Login already exists.");
+		}
+
+		User user = new()
+		{
+			DisplayName = xUsername,
+			Username = xUsername,
+			PasswordHash = hash,
+		};
+		
+		User? dbUser = await _userManager.TryRegisterUserAsync(user);
+		await _userManager.SaveChangesAsync();
+		if (dbUser is null)
+		{
+			return BadRequest("Failed to register user.");
+		}
+
+		return Ok();
 	}
-	
-	[HttpGet]
+
+	[HttpPost]
+	public ActionResult Logout() // Not sure that JS allowed to work with cookies, so there it is
+	{
+		if (Request.Cookies[UserManager.SessionKey] != null)
+		{
+			Response.Cookies.Delete(UserManager.SessionKey);
+		}
+
+		return Ok();
+	}
+
+	[HttpPost]
 	public async Task<ActionResult> Login()
 	{
 		StringValues loginValues = Request.HttpContext.Request.Headers["X-Username"];
@@ -87,74 +88,53 @@ public class UserController : ControllerBase
 		{
 			return BadRequest("X-Username and X-Password headers are required");
 		}
-		
-		string passwordHash = HashPassword(password);
 
-		Login? userLogin = _context.Logins
-			.Include(t => t.AssociatedUser)
-			.Where(u => u.Username == login)
-			.FirstOrDefault(u => u.PasswordHash == passwordHash);
+		User? user = await _userManager.GetUserByLoginAsync(login);
 
-		if (userLogin == null)
+		if (user == null)
 		{
 			return Unauthorized("Invalid username or password");
 		}
+
+		if (!_userManager.VerifyPassword(user, password))
+		{
+			return Unauthorized("Invalid password");
+		}
+
+		Session newSession = _userManager.AllocateNewSession(user);
+
+		Response.Cookies.Append(UserManager.SessionKey, newSession.Token, new CookieOptions()
+		{
+			HttpOnly = true,
+			Secure = true,
+			SameSite = SameSiteMode.Strict,
+			IsEssential = true,
+			MaxAge = TimeSpan.FromDays(7)
+		});
+		await _userManager.SaveChangesAsync();
+		return Ok();
+	}
+	
+	[HttpPatch]
+	public async Task<ActionResult> ChangeDisplayName(string newName)
+	{
+		User? user = await _userManager.GetUserByTokenAsync(Request);
+
+		if (user is null)
+		{
+			return Unauthorized("You are not logged in.");
+		}
 		
-		return Ok(CreateNewSession(userLogin.AssociatedUser));
+		user.DisplayName = newName;
+		await _userManager.SaveChangesAsync();
+		return Ok();
 	}
 
-	private string HashPassword(string password)
+	[HttpGet]
+	public async Task<string?> GetDisplayName()
 	{
-		return BCrypt.Net.BCrypt.HashPassword(password);
-	}
+		User? user = await _userManager.GetUserByTokenAsync(Request);
 
-	private Session CreateNewSession(User owner)
-	{
-		return _context.Sessions.Add(new Session()
-		{
-			Token = CreateSessionToken(),
-			User = owner,
-		}).Entity;
-	}
-
-	private string CreateSessionToken()
-	{
-		Span<char> buffer = stackalloc char[128];
-		Random shared = Random.Shared;
-
-		for (int i = 0; i < buffer.Length; i++)
-		{
-			int c = shared.Next(0, 256);
-
-			buffer[i] = c switch
-			{
-				< 10 => (char)('0' + c),
-				< 36 => (char)('A' + c - 10),
-				_ => (char)('a' + c - 36)
-			};
-		}
-
-		return new string(buffer);
-	}
-
-	private static readonly string AlphabetLower = "abcdefghijklmnopqrstuvwxyz";
-	private static readonly string AlphabetUpper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	private static readonly string Numbers = "1234567890";
-	private static readonly SearchValues<char> ValidCharacters = SearchValues.Create([.. AlphabetLower, ..AlphabetLower, ..Numbers]);
-	internal bool EnsurePasswordIsSecure(string password)
-	{
-		ValidCharacters.Contains(password[0]);
-	}
-
-	private static readonly HashSet<char> ValidCharacters2 = [.. AlphabetLower, ..AlphabetLower, ..Numbers];
-	internal bool EnsurePasswordIsSecureHashSet(string password)
-	{
-		string pass = password;
-		for (int i = ValidCharacters2.Count - 1; i >= 0; i--)
-		{
-			if (!ValidCharacters2.Contains(pass[i]))
-				return false;
-		}
-		return true;
+		return user?.DisplayName;
 	}
 }

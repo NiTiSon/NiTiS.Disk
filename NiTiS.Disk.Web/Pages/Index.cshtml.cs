@@ -1,11 +1,17 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Threading.Tasks;
+using NiTiS.Disk.Api.Data;
+using NiTiS.Disk.Api.Managers;
 
 namespace NiTiS.Disk.Web.Pages;
 
-public class IndexModel : PageModel
+public class IndexModel : BaseModel
 {
-	public void OnGet()
+	public IndexModel(UserManager userManager) : base(userManager)
 	{
+	}
+
+	public async Task OnGet()
+	{
+		await CheckAuthorization();
 	}
 }
