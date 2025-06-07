@@ -78,7 +78,9 @@ public sealed class UserManager : ManagerBase
 	public async Task<Session?> GetSessionAsync(string token)
 	{
 		DateTime currentTime = DateTime.UtcNow;
-		Session? session = await _context.Sessions.FirstOrDefaultAsync(t => t.Token == token);
+		Session? session = await _context.Sessions
+			.Include(t => t.User)
+			.FirstOrDefaultAsync(t => t.Token == token);
 
 		if (session == null)
 			return null;

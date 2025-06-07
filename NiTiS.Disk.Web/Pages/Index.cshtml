@@ -1,5 +1,27 @@
 ﻿@page
+@using NiTiS.Disk.Api.Data
 @model IndexModel
 @{
     ViewData["Title"] = "Disk";
 }
+<table class="table">
+    <thead>
+    <tr>
+        <th scope="col">Filename</th>
+        <th scope="col">Size</th>
+        <th scope="col">Owner</th>
+    </tr>
+    </thead>
+    <tbody>
+    @{
+        foreach (FileRecord file in Model.Files)
+        {
+            @:<tr>
+            @:  <td>@file.FileName</td>
+            @:  <td>@FileSize.ToDisplay(file.Size)</td>
+            @:  <td>@file.Owner.DisplayName</td>
+            @:</tr>
+        }
+    }
+    </tbody>
+</table>

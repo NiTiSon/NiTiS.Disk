@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Text.Json.Serialization;
 
 namespace NiTiS.Disk.Api.Data;
@@ -25,4 +26,6 @@ public record User
 	public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
 	public DateTime? LastUsedAt { get; set; }
+
+	public ulong BytesAvailable { get; set; } = 1024 * 1024 * 1024 * 3u;
 }
